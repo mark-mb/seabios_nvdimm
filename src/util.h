@@ -81,6 +81,8 @@ void copy_smbios(void *pos);
 void display_uuid(void);
 void copy_table(void *pos);
 void smbios_setup(void);
+int nfit_setup(void);
+struct nvdimm_addr *nfit_get_pmem_addr(void);
 
 // fw/coreboot.c
 extern const char *CBvendor, *CBpart;

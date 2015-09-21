@@ -18,6 +18,7 @@
 #include "string.h" // memcpy
 #include "util.h" // copy_table
 #include "x86.h" // outb
+#include "hw/nvdimm.h"
 
 struct pir_header *PirAddr VARFSEG;
 
@@ -170,6 +171,29 @@ find_resume_vector(void)
     // Found it.
     dprintf(4, "resume addr=%d\n", facs->firmware_waking_vector);
     return facs->firmware_waking_vector;
+}
+
+static struct nfit_descriptor *
+find_nfit(void)
+{
+    dprintf(4, "rsdp=%p\n", RsdpAddr);
+    if (!RsdpAddr || RsdpAddr->signature != RSDP_SIGNATURE)
+        return NULL;
+    struct rsdt_descriptor_rev1 *rsdt = (void*)RsdpAddr->rsdt_physical_address;
+    dprintf(4, "rsdt=%p\n", rsdt);
+    if (!rsdt || rsdt->signature != RSDT_SIGNATURE)
+        return NULL;
+    void *end = (void*)rsdt + rsdt->length;
+    int i;
+    for (i=0; (void*)&rsdt->table_offset_entry[i] < end; i++) {
+        struct nfit_descriptor *nfit = (void*)rsdt->table_offset_entry[i];
+        if (!nfit || nfit->signature != NFIT_SIGNATURE)
+            continue;
+        dprintf(4, "nfit=%p\n", nfit);
+        return nfit;
+    }
+    dprintf(4, "no nfit found\n");
+    return NULL;
 }
 
 static struct acpi_20_generic_address acpi_reset_reg;
@@ -479,6 +503,62 @@ smbios_setup(void)
     if (smbios_romfile_setup())
         return;
     smbios_legacy_setup();
+}
+
+/****************************************************************
+ * NFIT
+ ****************************************************************/
+
+#define NVDIMM_MAX 10 /* To avoid using dynamic arrays. Any nicer solution? */
+struct nfit_descriptor *NfitAddr;
+struct nvdimm_addr NvdimmAddr[NVDIMM_MAX + 1];
+
+int nfit_setup(void) {
+    if (NfitAddr) {
+        return 1;
+    }
+
+    NfitAddr = find_nfit();
+
+    if (!NfitAddr) {
+        return 0;
+    }
+
+    void *addr = (void *)NfitAddr + sizeof(*NfitAddr);
+    struct nfit_spa *spa;
+    int index_nvdimm = 0;
+
+    while (addr < ((void *)NfitAddr + NfitAddr->length)) {
+        u16 type = *((u16 *)addr);
+        u16 length = *((u16 *)(addr + 2));
+        if (type == NFIT_TABLE_SPA) {
+            spa = addr;
+
+            if (*(u64 *)(&spa->type_guid[0]) == *(u64 *)(&type_guid_pmem[0]) &&
+                *(u64 *)(&spa->type_guid[8]) == *(u64 *)(&type_guid_pmem[8])) {
+
+                NvdimmAddr[index_nvdimm].addr = spa->spa_base;
+                NvdimmAddr[index_nvdimm].length = spa->spa_length;
+                dprintf(1, "Found NVDIMM at address 0x%llx, size %llx\n",
+                                            spa->spa_base, spa->spa_length);
+                ++index_nvdimm;
+
+                if (index_nvdimm == NVDIMM_MAX) {
+                    dprintf(1, "Too many NVDIMMs. No more will be processed\n");
+                    return 1;
+                }
+            }
+        }
+
+        addr += length;
+    }
+
+    return 1;
+}
+
+struct nvdimm_addr *nfit_get_pmem_addr(void)
+{
+    return NvdimmAddr;
 }
 
 void

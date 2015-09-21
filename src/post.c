@@ -24,6 +24,7 @@
 #include "hw/usb.h" // usb_setup
 #include "hw/virtio-blk.h" // virtio_blk_setup
 #include "hw/virtio-scsi.h" // virtio_scsi_setup
+#include "hw/nvdimm.h" // nvdimm setup
 #include "malloc.h" // malloc_init
 #include "memmap.h" // SYMBOL
 #include "output.h" // dprintf
@@ -149,6 +150,7 @@ device_hardware_setup(void)
     esp_scsi_setup();
     megasas_setup();
     pvscsi_setup();
+    nvdimm_setup();
 }
 
 static void

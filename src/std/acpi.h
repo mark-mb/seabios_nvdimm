@@ -313,5 +313,45 @@ struct tcpa_descriptor_rev2
 #define TCPA_ACPI_CLASS_CLIENT          0
 #define TCPA_ACPI_CLASS_SERVER          1
 
+/*
+ * NFIT (NVDIMM firmware interface) table
+ */
+
+enum {
+    NFIT_TABLE_SPA = 0,
+    NFIT_TABLE_MEM = 1,
+    NFIT_TABLE_IDT = 2,
+    NFIT_TABLE_SMBIOS = 3,
+    NFIT_TABLE_DCR = 4,
+    NFIT_TABLE_BDW = 5,
+    NFIT_TABLE_FLUSH = 6,
+};
+
+#define NFIT_SIGNATURE 0x5449464E // NFIT
+struct nfit_descriptor
+{
+    ACPI_TABLE_HEADER_DEF
+    u32 reserved;
+} PACKED;
+
+/*
+ * struct nfit_spa - System Physical Address Range Structure
+ */
+struct nfit_spa {
+    u16 type;
+    u16 length;
+    u16 spa_index;
+    u16 flags;
+    u32 reserved;
+    u32 proximity_domain;
+    u8 type_guid[16];
+    u64 spa_base;
+    u64 spa_length;
+    u64 mem_attr;
+} PACKED;
+
+/* Converted into little endian */
+static const u8 type_guid_pmem[16] = {0x79, 0xD3, 0xF0, 0x66, 0xF3, 0xB4, 0x74, 0x40,
+                                0xAC, 0x43, 0x0D, 0x33, 0x18, 0xB7, 0x8C, 0xDB};
 
 #endif // acpi.h
