@@ -20,6 +20,7 @@
 #include "string.h" // memset
 #include "util.h" // irqtimer_calc
 #include "tcgbios.h" // tpm_*
+#include "hw/nvdimm.h"
 
 
 /****************************************************************
@@ -304,6 +305,7 @@ static struct hlist_head BootList VARVERIFY32INIT;
 #define IPL_TYPE_HARDDISK    0x02
 #define IPL_TYPE_CDROM       0x03
 #define IPL_TYPE_CBFS        0x20
+#define IPL_TYPE_NVDIMM      0x21
 #define IPL_TYPE_BEV         0x80
 #define IPL_TYPE_BCV         0x81
 #define IPL_TYPE_HALT        0xf0
@@ -396,6 +398,12 @@ void
 boot_add_cbfs(void *data, const char *desc, int prio)
 {
     bootentry_add(IPL_TYPE_CBFS, defPrio(prio, DEFAULT_PRIO), (u32)data, desc);
+}
+
+void
+boot_add_nvdimm(void *data, const char *desc, int prio)
+{
+    bootentry_add(IPL_TYPE_NVDIMM, defPrio(prio, DEFAULT_PRIO), (u32)data, desc);
 }
 
 
@@ -681,6 +689,13 @@ boot_cbfs(struct cbfs_file *file)
     cbfs_run_payload(file);
 }
 
+static void
+boot_nvdimm(struct nvdimm_addr* NvdimmAddr)
+{
+    printf("Booting from NVDIMM...\n");
+    nvdimm_boot(NvdimmAddr);
+}
+
 // Boot from a BEV entry on an optionrom.
 static void
 boot_rom(u32 vector)
@@ -737,6 +752,9 @@ do_boot(int seq_nr)
         break;
     case IPL_TYPE_CBFS:
         boot_cbfs((void*)ie->vector);
+        break;
+    case IPL_TYPE_NVDIMM:
+        boot_nvdimm((void *)ie->vector);
         break;
     case IPL_TYPE_BEV:
         boot_rom(ie->vector);

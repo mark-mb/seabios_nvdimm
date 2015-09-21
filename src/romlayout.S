@@ -286,6 +286,26 @@ __farcall16:
         IRQ_TRAMPOLINE 1c
         IRQ_TRAMPOLINE 4a
 
+        DECLFUNC kernel_stub
+kernel_stub:
+        movw %bx, %ds
+        movw %bx, %es
+        movw %bx, %fs
+        movw %bx, %gs
+        movw %bx, %ss
+        movl %edx, %esp
+        addw $0x20, %bx
+        pushw %bx    // push CS
+        pushw $0     // push IP
+        xorl %eax, %eax
+        xorl %ebx, %ebx
+        xorl %ecx, %ecx
+        xorl %edx, %edx
+        xorl %edi, %edi
+        xorl %esi, %esi
+        xorl %ebp, %ebp
+        lretw
+
 
 /****************************************************************
  * Misc. entry points.

@@ -7,5 +7,6 @@ struct nvdimm_addr {
 };
 
 void nvdimm_setup(void);
+void nvdimm_boot(struct nvdimm_addr *NvdimmAddr);
 
 #endif
