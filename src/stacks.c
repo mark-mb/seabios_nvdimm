@@ -15,6 +15,8 @@
 #include "stacks.h" // struct mutex_s
 #include "string.h" // memset
 #include "util.h" // useRTC
+#include "memmap.h" // PAGE_SIZE
+#include "string.h" // memset
 
 #define MAIN_STACK_MAX (1024*1024)
 
@@ -136,6 +138,7 @@ call16_helper(u32 eax, u32 edx, u32 (*func)(u32 eax, u32 edx))
 #define ASM32_BACK32   "  .popsection\n  .code32\n"
 #define ASM16_SWITCH32 "  .code32\n"
 #define ASM16_BACK16   "  .code16gcc\n"
+#define ASM32_SWITCH64 "  .code64\n"
 
 // Call a SeaBIOS C function in 32bit mode using smm trampoline
 static u32
@@ -310,6 +313,24 @@ call16(u32 eax, u32 edx, void *func)
     return eax;
 }
 
+u32 call64(void *page_table, void *func, u32 eax)
+{
+    ASSERT32FLAT();
+
+    asm volatile(
+        // Transition to 64bit mode
+        "  movl $1f, %%edx\n"
+        "  jmp transition64\n"
+        "1:movl %1, %%edx\n"
+        "  calll *%%edx\n"
+        "  movl $2f, %%edx\n"
+        "  jmp transition32_from_64\n"
+        "2:\n"
+        : "+a" (eax)
+        : "g" (func), "D" (page_table)
+        : "edx", "ebx", "ecx", "cc", "memory");
+    return eax;
+}
 
 /****************************************************************
  * Extra 16bit stack
@@ -760,4 +781,60 @@ __call32_params(void *func, u32 eax, u32 edx, u32 ecx, u32 errret)
     struct call32_params_s params = {func, eax, edx, ecx};
     return call32(call32_params_helper, MAKE_FLATPTR(GET_SEG(SS), &params)
                   , errret);
+}
+
+/****************************************************************
+ * Page table
+ ****************************************************************/
+void *gen_identity_page_table(u64 max_addr)
+{
+    /* Map directly all the addresses */
+    u32 pt_entries = (max_addr + 0xFFF) >> 12;
+    u32 pdt_entries = (pt_entries + 0x1FF) >> 9;
+    u32 pdpt_entries = (pdt_entries + 0x1FF) >> 9;
+    u32 pml4_entries = (pdpt_entries + 0x1FF) >> 9;
+
+    if (pml4_entries > 1) {
+        dprintf(1, "Page table too big\n");
+        return NULL;
+    }
+
+    u32 table_size = (pdt_entries << 12) // PT size
+                    + (pdpt_entries << 12) // PDT size
+                    + (pml4_entries << 12) // PDPT size
+                    + ((pml4_entries + 0xFFF) >> 12); // PML4 size
+
+    void *table = memalign_tmp(PAGE_SIZE, table_size);
+    u64 *cur_pos = table;
+    u32 i;
+
+    memset(table, 0, table_size);
+
+    void *pt_start = cur_pos;
+    for (i = 0; i < pt_entries; ++i, ++cur_pos) {
+        *cur_pos = ((u64)i << 12) | 3;
+    }
+
+    cur_pos = (u64 *)ALIGN((u32)cur_pos, PAGE_SIZE);
+    void *pdt_start = cur_pos;
+
+    for (i = 0; i < pdt_entries; ++i, ++cur_pos) {
+        *cur_pos = ((u32)pt_start + (i << 12)) | 3;
+    }
+
+    cur_pos = (u64 *)ALIGN((u32)cur_pos, PAGE_SIZE);
+    void *pdpt_start = cur_pos;
+
+    for (i = 0; i < pdpt_entries; ++i, ++cur_pos) {
+        *cur_pos = ((u32)pdt_start + (i << 12)) | 3;
+    }
+
+    cur_pos = (u64 *)ALIGN((u32)cur_pos, PAGE_SIZE);
+    void *pml4_start = cur_pos;
+
+    for (i = 0; i < pml4_entries; ++i, ++cur_pos) {
+        *cur_pos = ((u32)pdpt_start + (i << 12)) | 3;
+    }
+
+    return pml4_start;
 }

@@ -55,6 +55,8 @@ u32 __call32_params(void *func, u32 eax, u32 edx, u32 ecx, u32 errret);
         __call32_params( _cfunc32flat_ ##func , (u32)(eax), (u32)(edx)  \
                         , (u32)(ecx), (errret));                        \
     })
+u32 call64(void *page_table, void *func, u32 eax);
+void *gen_identity_page_table(u64 max_addr);
 
 // Inline functions
 

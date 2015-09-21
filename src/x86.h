@@ -229,6 +229,7 @@ static inline u8 readb(const void *addr) {
 // GDT bits
 #define GDT_CODE     (0x9bULL << 40) // Code segment - P,R,A bits also set
 #define GDT_DATA     (0x93ULL << 40) // Data segment - W,A bits also set
+#define GDT_L        (0X1ULL << 53)  // Long flag
 #define GDT_B        (0x1ULL << 54)  // Big flag
 #define GDT_G        (0x1ULL << 55)  // Granularity flag
 // GDT bits for segment base

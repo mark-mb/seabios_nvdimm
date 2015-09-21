@@ -69,6 +69,8 @@
 #define SEG32_MODE16_DS    (4 << 3)
 #define SEG32_MODE16BIG_CS (5 << 3)
 #define SEG32_MODE16BIG_DS (6 << 3)
+#define SEG32_MODE64_CS    (7 << 3)
+#define SEG32_MODE64_DS    (8 << 3)
 
 // Debugging levels.  If non-zero and CONFIG_DEBUG_LEVEL is greater
 // than the specified value, then the corresponding irq handler will

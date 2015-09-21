@@ -116,6 +116,112 @@ transition16big:
 
         jmpl *%edx
 
+// Place CPU into 64bit mode from 32bit mode.
+// %edi = Valid page table.
+// %edx = return location (in 32bit mode)
+// Clobbers: ebx, ecx, flags, control registers
+
+        DECLFUNC transition64
+        .code32
+transition64:
+        // Paging is already disabled
+
+        // Enable PAE
+        movl %cr4, %ebx
+        orl $0x20, %ebx
+        movl %ebx, %cr4
+
+        // Point CR3 at the PML4
+        movl %edi, %cr3
+
+        // Save valuable info in %eax and %edx before rdmsr erases it
+        movl %edx, %ebx
+        movl %eax, %edi
+
+        // Enable IA-32E mode
+        movl $0xC0000080, %ecx
+        rdmsr
+        orl $0x100, %eax
+        wrmsr
+
+        // Restore saved info
+        movl %ebx, %edx
+        movl %edi, %eax
+
+        // Enable paging
+        movl %cr0, %ebx
+        orl $0x80000000, %ebx
+        movl %ebx, %cr0
+
+        ljmpl $SEG32_MODE64_CS, $(BUILD_BIOS_ADDR + 1f)
+
+        // Set segment descriptor
+1:      movl $SEG32_MODE64_DS, %ebx
+        movw %bx, %ds
+        movw %bx, %es
+        movw %bx, %ss
+        movw %bx, %fs
+        movw %bx, %gs
+
+        // Jump
+        jmpl *%edx
+
+        .code16
+
+// Place CPU into 32bit mode from 64bit mode.
+// %edx = return location (in 32bit mode)
+// Clobbers: ebx, ecx, edi, flags, control registers
+
+        DECLFUNC transition32_from_64
+transition32_from_64:
+        // Jump into compatibility mode
+        .code64
+        movl $SEG32_MODE32_CS, %ecx
+        pushq %rcx // CS
+        movl $(BUILD_BIOS_ADDR + 1f), %ecx
+        pushq %rcx // IP
+        retfq
+
+        .code32
+        // Set 32 bit mode segments
+1:      movl $SEG32_MODE32_DS, %ebx
+        movw %bx, %ds
+        movw %bx, %es
+        movw %bx, %ss
+        movw %bx, %fs
+        movw %bx, %gs
+
+        // Disable paging
+        movl %cr0, %ebx
+        andl $(~0x80000000), %ebx
+        movl %ebx, %cr0
+
+        // Point cr3 to 0 again
+        movl $0, %ebx
+        movl %ebx, %cr3
+
+        // Disable PAE
+        movl %cr4, %ebx
+        andl $(~0x20), %ebx
+        movl %ebx, %cr4
+
+        // Save valuable info in %eax and %edx before rdmsr erases it
+        movl %edx, %ebx
+        movl %eax, %edi
+
+        // Disable IA-32E mode
+        movl $0xC0000080, %ecx
+        rdmsr
+        andl $(~0x100), %eax
+        wrmsr
+
+        // Restore saved info
+        movl %ebx, %edx
+        movl %edi, %eax
+
+        // Jump
+        jmpl *%edx
+        .code16
 
 /****************************************************************
  * External calling trampolines
